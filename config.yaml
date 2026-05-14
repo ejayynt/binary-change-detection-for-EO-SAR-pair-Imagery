@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# GalaxEye EO-SAR Change Detection — Training Configuration
+# All hyperparameters are logged here for full reproducibility.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+data:
+  root_dir: Draft    # Path to dataset root (edit before running)
+  train_split: "train"
+  val_split: "val"
+  test_split: "test"
+
+# ── Training ──────────────────────────────────────────────────────────────────
+training:
+  epochs: 50
+  batch_size: 8                 # Stable for 256×256 crops on ~8 GB VRAM
+  crop_size: 256                # Random crop size during training
+  num_workers: 0               # DataLoader worker processes (set 0 on Windows)
+  pin_memory: true
+  random_seed: 42
+  use_amp: true        # enable mixed precision on GPU
+  grad_clip: 1.0
+
+
+# ── Optimiser ─────────────────────────────────────────────────────────────────
+optimizer:
+  name: "AdamW"
+  weight_decay: 1.0e-4
+  # Differential learning rates: protect ImageNet weights in EO encoder
+  lr_eo_encoder: 1.0e-5         # Fine-tune pretrained backbone slowly
+  lr_other: 1.0e-3              # SAR encoder + bottleneck + decoder train faster
+
+# ── Scheduler ─────────────────────────────────────────────────────────────────
+scheduler:
+  name: "CosineAnnealingLR"
+  T_max: 50                     # Must equal training.epochs
+
+# ── Loss Function ─────────────────────────────────────────────────────────────
+loss:
+  name: "HybridFocalDice"
+  focal_alpha: 0.75             # Weight for the positive (Change) class in Focal loss
+  focal_gamma: 2.0              # Focusing parameter — higher = more focus on hard examples
+  dice_smooth: 1.0e-6
+
+# ── Model ─────────────────────────────────────────────────────────────────────
+model:
+  name: "PseudoSiameseUNet"
+  backbone: "resnet34"
+  eo_pretrained: true           # ImageNet weights for EO encoder
+  sar_pretrained: false         # SAR encoder trained from scratch
+
+# ── Augmentation ──────────────────────────────────────────────────────────────
+augmentation:
+  enabled: true
+  horizontal_flip: true
+  vertical_flip: true
+  random_rotate_90: true
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
+evaluation:
+  threshold: 0.5                # Sigmoid threshold for binary prediction
+  save_visualizations: true
+  num_vis_samples: 5   
+  val_thresholds: [0.2, 0.3, 0.4, 0.5]         # Min 5 required by assignment
+
+# ── Checkpointing ─────────────────────────────────────────────────────────────
+checkpoint:
+  save_path: "checkpoints/best_model.pth"
+  monitor: "val_f1"             # Metric used to select the best checkpoint
+
+  
